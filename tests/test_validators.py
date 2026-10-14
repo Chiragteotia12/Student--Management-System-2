@@ -45,5 +45,13 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(student.grade, "A")
 
 
+    def test_name_rejects_blank_and_number_only_values(self):
+        for value in ("", "   ", "12345"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError):
+                    validate_name(value)
+
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -242,25 +242,51 @@ class StudentRepository:
         LOGGER.info("CSV import completed imported=%s skipped=%s errors=%s", imported, skipped, len(errors))
         return {"imported": imported, "skipped": skipped, "errors": errors}
 
+
     def backup(self, destination: Optional[Path | str] = None) -> Path:
-        """Create a consistent SQLite backup using SQLite's backup API."""
+        """Create a consistent SQLite backup and close all connections."""
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        target = Path(destination) if destination else BACKUP_DIR / f"students-{datetime.now():%Y%m%d-%H%M%S}.db"
+
+        target = (
+            Path(destination)
+            if destination
+            else BACKUP_DIR
+            / f"students-{datetime.now():%Y%m%d-%H%M%S}.db"
+        )
         target.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.database_path) as source, sqlite3.connect(target) as backup:
+
+        source = sqlite3.connect(self.database_path, timeout=10)
+        backup = None
+
+        try:
+            backup = sqlite3.connect(target, timeout=10)
             source.backup(backup)
+        finally:
+            if backup is not None:
+                backup.close()
+            source.close()
+
         LOGGER.info("Database backup created at %s", target)
         return target
+
 
     def restore_backup(self, source_path: Path | str) -> None:
         """Restore from a backup after verifying it can be opened as SQLite."""
         source_path = Path(source_path)
+
         if not source_path.exists():
             raise FileNotFoundError(source_path)
-        with sqlite3.connect(source_path) as source:
+
+        source = sqlite3.connect(source_path, timeout=10)
+        try:
             result = source.execute("PRAGMA integrity_check").fetchone()
             if not result or result[0] != "ok":
-                raise ValueError("The selected backup failed the SQLite integrity check.")
+                raise ValueError(
+                    "The selected backup failed the SQLite integrity check."
+                )
+        finally:
+            source.close()
+
         shutil.copy2(source_path, self.database_path)
         self.initialize()
         LOGGER.warning("Database restored from %s", source_path)
