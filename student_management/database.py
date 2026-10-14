@@ -136,15 +136,20 @@ class StudentRepository:
             row = conn.execute("SELECT * FROM students WHERE roll_no = ?", (roll_no,)).fetchone()
         return self._student_from_row(row) if row else None
 
-    def list_students(self, search: str = "", course: str = "") -> list[Student]:
-        """List students with case-insensitive search and optional course filtering."""
+    def list_students(
+            self,
+            search: str = "",
+            course: str = "",
+            limit: int | None = None,
+            offset: int = 0,
+    ) -> list[Student]:
+        """List students with search, course filtering, sorting, and pagination."""
         conditions = []
         parameters = []
 
         search_term = search.strip()
         selected_course = course.strip()
 
-        # Search by roll number, name, or course.
         if search_term:
             token = f"%{search_term}%"
             conditions.append(
@@ -154,18 +159,31 @@ class StudentRepository:
             )
             parameters.extend([token, token, token])
 
-        # Apply the course filter unless all courses are selected.
         if selected_course and selected_course.casefold() != "all courses":
             conditions.append("course = ? COLLATE NOCASE")
             parameters.append(selected_course)
 
-        # Build the query safely using parameterized values.
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
         query = (
             "SELECT * FROM students"
             f"{where} "
             "ORDER BY name COLLATE NOCASE, roll_no COLLATE NOCASE"
         )
+
+        if limit is not None:
+            if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+                raise ValueError("limit must be a positive integer")
+            query += " LIMIT ?"
+            parameters.append(limit)
+
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("offset must be a non-negative integer")
+
+        if offset:
+            if limit is None:
+                query += " LIMIT -1"
+            query += " OFFSET ?"
+            parameters.append(offset)
 
         with self.connection() as conn:
             rows = conn.execute(query, parameters).fetchall()
