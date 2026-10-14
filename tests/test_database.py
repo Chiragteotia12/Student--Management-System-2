@@ -54,6 +54,51 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(len(self.repo.list_students(search="ada")), 1)
         self.assertEqual(len(self.repo.list_students(search="B.Tech")), 2)
 
+
+
+    def test_search_matches_roll_number_case_insensitively(self):
+        self.repo.add_student(make_student(roll="CS001"))
+        results = self.repo.list_students(search="cs001")
+        self.assertEqual([student.roll_no for student in results], ["CS001"])
+
+    def test_search_trims_surrounding_whitespace(self):
+        self.repo.add_student(make_student())
+        results = self.repo.list_students(search="  ada  ")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].name, "Ada Lovelace")
+
+    def test_course_filter_is_case_insensitive(self):
+        self.repo.add_student(make_student())
+        results = self.repo.list_students(course="b.tech cse")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].roll_no, "CS001")
+
+    def test_search_and_course_filter_work_together(self):
+        self.repo.add_student(make_student("CS001", "Ada Lovelace"))
+        self.repo.add_student(make_student("CS002", "Grace Hopper"))
+        results = self.repo.list_students(
+            search="ada",
+            course="B.Tech CSE",
+        )
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].roll_no, "CS001")
+
+    def test_all_courses_filter_returns_every_student(self):
+        self.repo.add_student(make_student("CS001", "Ada Lovelace"))
+        self.repo.add_student(make_student("CS002", "Grace Hopper"))
+        results = self.repo.list_students(course="All courses")
+        self.assertEqual(len(results), 2)
+
+    def test_search_with_no_match_returns_empty_list(self):
+        self.repo.add_student(make_student())
+        self.assertEqual(
+            self.repo.list_students(search="student-does-not-exist"),
+            [],
+        )
+
+
+
+
     def test_csv_round_trip(self):
         self.repo.add_student(make_student())
         output = self.root / "students.csv"
