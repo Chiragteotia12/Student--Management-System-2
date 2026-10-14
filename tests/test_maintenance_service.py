@@ -21,16 +21,34 @@ class MaintenanceServiceTests(unittest.TestCase):
         self.assertFalse(report["exists"])
         self.assertEqual(report["integrity"], "missing")
 
+
+
     def test_database_health(self):
         path = self.root / "health.db"
-        with sqlite3.connect(path) as connection:
-            connection.execute("CREATE TABLE students (id INTEGER)")
-            connection.execute("INSERT INTO students VALUES (1)")
-            connection.execute("CREATE TABLE users (id INTEGER)")
+
+        connection = sqlite3.connect(path)
+        try:
+            connection.execute(
+                "CREATE TABLE students (id INTEGER)"
+            )
+            connection.execute(
+                "INSERT INTO students VALUES (1)"
+            )
+            connection.execute(
+                "CREATE TABLE users (id INTEGER)"
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
         report = database_health(path)
+
         self.assertEqual(report["integrity"], "ok")
         self.assertEqual(report["student_count"], 1)
         self.assertEqual(report["user_count"], 0)
+
+
+
 
     def test_list_and_prune_backups_dry_run(self):
         folder = self.root / "backups"
