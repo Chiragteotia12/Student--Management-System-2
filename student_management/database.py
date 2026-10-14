@@ -137,19 +137,39 @@ class StudentRepository:
         return self._student_from_row(row) if row else None
 
     def list_students(self, search: str = "", course: str = "") -> list[Student]:
-        """List students sorted numerically where possible, then alphabetically."""
-        conditions, parameters = [], []
-        if search.strip():
-            token = f"%{search.strip()}%"
-            conditions.append("(roll_no LIKE ? OR name LIKE ? OR course LIKE ?)")
+        """List students with case-insensitive search and optional course filtering."""
+        conditions = []
+        parameters = []
+
+        search_term = search.strip()
+        selected_course = course.strip()
+
+        # Search by roll number, name, or course.
+        if search_term:
+            token = f"%{search_term}%"
+            conditions.append(
+                "(roll_no LIKE ? COLLATE NOCASE "
+                "OR name LIKE ? COLLATE NOCASE "
+                "OR course LIKE ? COLLATE NOCASE)"
+            )
             parameters.extend([token, token, token])
-        if course.strip() and course != "All courses":
-            conditions.append("course = ?")
-            parameters.append(course)
+
+        # Apply the course filter unless all courses are selected.
+        if selected_course and selected_course.casefold() != "all courses":
+            conditions.append("course = ? COLLATE NOCASE")
+            parameters.append(selected_course)
+
+        # Build the query safely using parameterized values.
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
-        query = f"SELECT * FROM students{where} ORDER BY name COLLATE NOCASE, roll_no COLLATE NOCASE"
+        query = (
+            "SELECT * FROM students"
+            f"{where} "
+            "ORDER BY name COLLATE NOCASE, roll_no COLLATE NOCASE"
+        )
+
         with self.connection() as conn:
             rows = conn.execute(query, parameters).fetchall()
+
         return [self._student_from_row(row) for row in rows]
 
     def count_students(self) -> int:
